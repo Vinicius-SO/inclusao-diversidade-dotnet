@@ -1,0 +1,44 @@
+# --- Build e Dependências ---
+[Bb]in/
+[Oo]bj/
+packages/
+
+# --- Visual Studio / IDEs ---
+.vs/
+.vscode/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.launch
+*.hidden
+
+# --- Logs e Diagnósticos ---
+*.log
+*.txt
+TestResults/
+
+# --- Arquivos de Sistema Operacional (Lixo gerado pelo Windows/Mac) ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Arquivos Compilados / Temporários ---
+*.dll
+*.pdb
+*.exe
+*.cache
+*.force
+
+# --- SEGURANÇA E AMBIENTE (Muito Importante) ---
+# Ignorar configurações locais que podem conter senhas ou keys
+appsettings.Development.json
+appsettings.Local.json
+.env
+secrets.json
+
+# --- Outros ---
+[Tt]emp/
+*.swp
+*.~*

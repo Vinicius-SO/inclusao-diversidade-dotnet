@@ -1,18 +1,19 @@
 ﻿using InclusaoDiversidadeEmpresas.Services;
+using InclusaoDiversidadeEmpresas.ViewModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization; 
 
 namespace InclusaoDiversidadeEmpresas.Controllers
 {
-    [Route("api/[controller]")] 
+    [Route("api/[controller]")]
     [ApiController]
     [Authorize]
     public class RelatoriosController : ControllerBase
     {
         private readonly IRelatorioService _relatorioService;
 
-       
+
         public RelatoriosController(IRelatorioService relatorioService)
         {
             _relatorioService = relatorioService;
@@ -20,7 +21,7 @@ namespace InclusaoDiversidadeEmpresas.Controllers
 
         // Endpoint: GET /api/Relatorios/diversidade
         [HttpGet("diversidade")]
-        [Authorize(Roles = "Admin")] 
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetRelatorioDiversidade()
         {
             var relatorio = await _relatorioService.GerarRelatorioAsync();
@@ -31,7 +32,7 @@ namespace InclusaoDiversidadeEmpresas.Controllers
             }
 
             // Retorna o objeto RelatorioDeDiversidadeModel no formato JSON
-            return Ok(relatorio);
+            return Ok(new DashboardDiversidadeViewModel(relatorio));
         }
     }
 }

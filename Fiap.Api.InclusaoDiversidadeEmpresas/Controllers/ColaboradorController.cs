@@ -1,12 +1,17 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿
+using Fiap.Api.InclusaoDiversidadeEmpresas.Models;
+using Fiap.Api.InclusaoDiversidadeEmpresas.Services;
+using Fiap.Api.InclusaoDiversidadeEmpresas.ViewModel;
+using Fiap.Api.InclusaoDiversidadeEmpresas.ViewModels;
 using InclusaoDiversidadeEmpresas.Models;
-using InclusaoDiversidadeEmpresas.Services;
-using Microsoft.AspNetCore.Authorization; // 👈 NECESSÁRIO para usar [Authorize]
+using InclusaoDiversidadeEmpresas.ViewModels;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize] 
+[Authorize]
 public class ColaboradoresController : ControllerBase
 {
     private readonly IColaboradorService _service;
@@ -16,10 +21,10 @@ public class ColaboradoresController : ControllerBase
         _service = service;
     }
 
-   
-    // Mapeado para POST /api/Colaboradores
+
+    // ... (Método POST)
     [HttpPost]
-    [Authorize(Roles = "Admin")] //Apenas Admin pode criar um novo Colaborador
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<Colaborador>> PostColaborador(Colaborador colaborador)
     {
         var novoColaborador = await _service.AddColaborador(colaborador);
@@ -28,18 +33,19 @@ public class ColaboradoresController : ControllerBase
     }
 
 
-    // READ (LISTAR TODOS)
-    // Mapeado para GET /api/Colaboradores
+    // READ (LISTAR TODOS) 
+    // Mapeado para GET /api/Colaboradores?PageNumber=...&PageSize=...
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Colaborador>>> GetColaboradores()
+    public async Task<ActionResult<PagedResultViewModel<ColaboradorListaViewModel>>> GetColaboradores(
+        [FromQuery] QueryParameters parameters)
     {
-        var colaboradores = await _service.GetAllColaboradores();
+        // As validações de tamanho de página (min/max) já estão dentro do QueryParameters.cs!
+        var resultado = await _service.GetAllColaboradores(parameters);
 
-        return Ok(colaboradores);
+        return Ok(resultado);
     }
 
-    // READ (LISTAR POR ID)
-    // Mapeado para GET /api/Colaboradores/{id}
+    // ... (READ por ID, PUT e DELETE permanecem os mesmos)
     [HttpGet("{id}")]
     public async Task<ActionResult<Colaborador>> GetColaborador(long id)
     {
@@ -53,9 +59,8 @@ public class ColaboradoresController : ControllerBase
         return Ok(colaborador);
     }
 
-    // Mapeado para PUT /api/Colaboradores/{id}
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin")] //Apenas Admin pode atualizar
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> PutColaborador(long id, Colaborador colaborador)
     {
         if (id != colaborador.Id)
@@ -63,7 +68,6 @@ public class ColaboradoresController : ControllerBase
             return BadRequest();
         }
 
-        // Chama o método no Service
         var colaboradorAtualizado = await _service.UpdateColaborador(colaborador);
 
         if (colaboradorAtualizado == null)
@@ -74,10 +78,8 @@ public class ColaboradoresController : ControllerBase
         return NoContent();
     }
 
-
-    // Mapeado para DELETE /api/Colaboradores/{id}
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Admin")] 
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteColaborador(long id)
     {
         var success = await _service.DeleteColaborador(id);

@@ -1,44 +1,23 @@
-# --- Build e Dependências ---
-[Bb]in/
-[Oo]bj/
-packages/
-
-# --- Visual Studio / IDEs ---
+# Visual Studio / VSCode
 .vs/
-.vscode/
 *.user
-*.userosscache
-*.sln.docstates
 *.suo
-*.launch
-*.hidden
 
-# --- Logs e Diagnósticos ---
+# Build
+bin/
+obj/
+
+# Logs
 *.log
-*.txt
-TestResults/
 
-# --- Arquivos de Sistema Operacional (Lixo gerado pelo Windows/Mac) ---
-.DS_Store
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# --- Arquivos Compilados / Temporários ---
+# DLL / artefatos temporÃ¡rios
 *.dll
 *.pdb
-*.exe
-*.cache
-*.force
 
-# --- SEGURANÇA E AMBIENTE (Muito Importante) ---
-# Ignorar configurações locais que podem conter senhas ou keys
-appsettings.Development.json
-appsettings.Local.json
-.env
-secrets.json
-
-# --- Outros ---
-[Tt]emp/
-*.swp
-*.~*
+.vs/Fiap.Api.InclusaoDiversidadeEmpresas.slnx/v18/.suo
+/.vs/Fiap.Api.InclusaoDiversidadeEmpresas.slnx/v18/.wsuo
+/.vs/VSWorkspaceState.json
+/.vs/Fiap.Api.InclusaoDiversidadeEmpresas.slnx/v18/.suo
+/.vs/Fiap.Api.InclusaoDiversidadeEmpresas.slnx/v18/.futdcache.v2
+/.vs/Fiap.Api.InclusaoDiversidadeEmpresas.slnx/v18/DocumentLayout.backup.json
+/.vs/Fiap.Api.InclusaoDiversidadeEmpresas.slnx/v18/DocumentLayout.json

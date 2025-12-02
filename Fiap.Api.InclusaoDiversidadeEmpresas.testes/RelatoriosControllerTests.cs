@@ -1,97 +1,86 @@
-﻿using Fiap.Api.InclusaoDiversidadeEmpresas.Services;
+﻿using InclusaoDiversidadeEmpresas.Controllers;
 using InclusaoDiversidadeEmpresas.Models;
 using InclusaoDiversidadeEmpresas.Services;
+using InclusaoDiversidadeEmpresas.ViewModels;
+using Microsoft.AspNetCore.Mvc;
 using Moq;
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace Fiap.Api.InclusaoDiversidadeEmpresas.testes
+namespace InclusaoDiversidadeEmpresas.Tests.Controllers
 {
-    public class RelatorioServiceTests
+    public class RelatoriosControllerTests
     {
         [Fact]
-        public async Task GerarRelatorioAsync_DeveGerarRelatorioCorretamente()
+        public async Task GetRelatorioDiversidade_DeveRetornarOk_QuandoRelatorioExistir()
         {
             // Arrange
-            var mockColaboradorService = new Mock<IColaboradorService>();
+            var mockService = new Mock<IRelatorioService>();
 
-            var colaboradoresFake = new List<Colaborador>
+            var relatorioFake = new RelatorioDeDiversidadeModel
             {
-                new Colaborador {
-                    NomeColaborador = "A", Email = "a@a.com", Senha = "123",
-                    Departamento = "TI",
-                    GeneroColaborador = "Feminino",
-                    EtniaColaborador = "Preta",
-                    TemDisabilidade = true
-                },
-
-                new Colaborador {
-                    NomeColaborador = "B", Email = "b@b.com", Senha = "123",
-                    Departamento = "TI",
-                    GeneroColaborador = "Masculino",
-                    EtniaColaborador = "Branca",
-                    TemDisabilidade = false
-                },
-
-                new Colaborador {
-                    NomeColaborador = "C", Email = "c@c.com", Senha = "123",
-                    Departamento = "TI",
-                    GeneroColaborador = "Não Binário",
-                    EtniaColaborador = "Parda",
-                    TemDisabilidade = false
-                },
-
-                new Colaborador {
-                    NomeColaborador = "D", Email = "d@d.com", Senha = "123",
-                    Departamento = "TI",
-                    GeneroColaborador = "Feminino",
-                    EtniaColaborador = "Branca",
-                    TemDisabilidade = true
-                }
+                DataGerada = DateTime.UtcNow,
+                TotalColaborador = 10,
+                ContagemDeMulheres = 4,
+                ContagemDePessoasNegras = 3,
+                ContagemDePessoasLgbt = 2,
+                ContagemDePessoasComDesabilidade = 1
             };
 
-            mockColaboradorService
-                .Setup(s => s.GetAllColaboradores())
-                .ReturnsAsync(colaboradoresFake);
+            mockService
+                .Setup(s => s.GerarRelatorioAsync())
+                .ReturnsAsync(relatorioFake);
 
-            var service = new RelatorioService(mockColaboradorService.Object);
+            var controller = new RelatoriosController(mockService.Object);
 
             // Act
-            var relatorio = await service.GerarRelatorioAsync();
+            var resultado = await controller.GetRelatorioDiversidade();
 
             // Assert
-            Assert.NotNull(relatorio);
-            Assert.Equal(4, relatorio.TotalColaborador);
-            Assert.Equal(2, relatorio.ContagemDeMulheres);               // 2 Feminino
-            Assert.Equal(2, relatorio.ContagemDePessoasNegras);          // 1 Preta + 1 Parda
-            Assert.Equal(1, relatorio.ContagemDePessoasLgbt);            // 1 Não Binário
-            Assert.Equal(2, relatorio.ContagemDePessoasComDesabilidade); // 2 true
+            var okResult = Assert.IsType<OkObjectResult>(resultado);
+            Assert.Equal(200, okResult.StatusCode);
+
+            var retorno = Assert.IsType<DashboardDiversidadeViewModel>(okResult.Value);
+
+            // Validação das propriedades
+            Assert.Equal(relatorioFake.DataGerada, retorno.DataGerada);
+            Assert.Equal(10, retorno.TotalColaborador);
+            Assert.Equal(4, retorno.QtdMulheres);
+            Assert.Equal(3, retorno.QtdNegros);
+            Assert.Equal(2, retorno.QtdLgbt);
+            Assert.Equal(1, retorno.QtdPcd);
+
+            // Validação das porcentagens
+            Assert.Equal(40.00, retorno.PorcentagemMulheres);
+            Assert.Equal(30.00, retorno.PorcentagemNegros);
+            Assert.Equal(20.00, retorno.PorcentagemLgbt);
+            Assert.Equal(10.00, retorno.PorcentagemPcd);
+
+            mockService.Verify(s => s.GerarRelatorioAsync(), Times.Once);
         }
 
         [Fact]
-        public async Task GerarRelatorioAsync_DeveRetornarValoresZerados_QuandoSemColaboradores()
+        public async Task GetRelatorioDiversidade_DeveRetornarNotFound_QuandoRelatorioForNulo()
         {
             // Arrange
-            var mockColaboradorService = new Mock<IColaboradorService>();
+            var mockService = new Mock<IRelatorioService>();
 
-            mockColaboradorService
-                .Setup(s => s.GetAllColaboradores())
-                .ReturnsAsync(new List<Colaborador>());
+            mockService
+                .Setup(s => s.GerarRelatorioAsync())
+                .ReturnsAsync((RelatorioDeDiversidadeModel)null!);
 
-            var service = new RelatorioService(mockColaboradorService.Object);
+            var controller = new RelatoriosController(mockService.Object);
 
             // Act
-            var relatorio = await service.GerarRelatorioAsync();
+            var resultado = await controller.GetRelatorioDiversidade();
 
             // Assert
-            Assert.NotNull(relatorio);
-            Assert.Equal(0, relatorio.TotalColaborador);
-            Assert.Equal(0, relatorio.ContagemDeMulheres);
-            Assert.Equal(0, relatorio.ContagemDePessoasNegras);
-            Assert.Equal(0, relatorio.ContagemDePessoasLgbt);
-            Assert.Equal(0, relatorio.ContagemDePessoasComDesabilidade);
+            var notFoundResult = Assert.IsType<NotFoundObjectResult>(resultado);
+            Assert.Equal(404, notFoundResult.StatusCode);
+            Assert.Equal("Não foi possível gerar o relatório.", notFoundResult.Value);
+
+            mockService.Verify(s => s.GerarRelatorioAsync(), Times.Once);
         }
     }
 }

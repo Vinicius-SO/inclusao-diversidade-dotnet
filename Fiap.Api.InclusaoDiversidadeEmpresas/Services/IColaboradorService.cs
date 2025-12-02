@@ -1,23 +1,24 @@
-﻿using InclusaoDiversidadeEmpresas.Models;
+﻿
 
-namespace InclusaoDiversidadeEmpresas.Services
+using Fiap.Api.InclusaoDiversidadeEmpresas.Models;
+using InclusaoDiversidadeEmpresas.Models;
+using InclusaoDiversidadeEmpresas.ViewModels;
+using Fiap.Api.InclusaoDiversidadeEmpresas.ViewModels;
+using System.Threading.Tasks; 
+
+namespace Fiap.Api.InclusaoDiversidadeEmpresas.Services
 {
-    // Interface que define os métodos que o Controller pode chamar
     public interface IColaboradorService
     {
-        // CREATE
         Task<Colaborador> AddColaborador(Colaborador colaborador);
 
-        // READ (Listar Todos)
-        Task<IEnumerable<Colaborador>> GetAllColaboradores();
+       
+        Task<PagedResultViewModel<ColaboradorListaViewModel>> GetAllColaboradores(QueryParameters parameters);
 
-        // READ (Por ID)
         Task<Colaborador?> GetColaboradorById(long id);
 
-        // UPDATE
         Task<Colaborador?> UpdateColaborador(Colaborador colaborador);
 
-        // DELETE
         Task<bool> DeleteColaborador(long id);
     }
 }

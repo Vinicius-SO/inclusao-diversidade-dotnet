@@ -1,6 +1,9 @@
-﻿using InclusaoDiversidadeEmpresas.Controllers;
+﻿using Fiap.Api.InclusaoDiversidadeEmpresas.Models;
+using Fiap.Api.InclusaoDiversidadeEmpresas.Services;
+using Fiap.Api.InclusaoDiversidadeEmpresas.ViewModels;
+using InclusaoDiversidadeEmpresas.Controllers;
 using InclusaoDiversidadeEmpresas.Models;
-using InclusaoDiversidadeEmpresas.Services;
+using InclusaoDiversidadeEmpresas.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 
@@ -22,29 +25,39 @@ namespace Fiap.Api.InclusaoDiversidadeEmpresas.testes
             };
         }
 
-        // GET /api/Colaboradores
-        [Fact]
-        public async Task GetColaboradores_Returns200AndList()
+       [Fact]
+        public async Task GetColaboradores_Returns200AndPagedResult()
         {
             // Arrange
             var mockService = new Mock<IColaboradorService>();
 
-            mockService.Setup(s => s.GetAllColaboradores())
-                .ReturnsAsync(new List<Colaborador> { CriarColaboradorFake() });
+            var pagedResult = new PagedResultViewModel<ColaboradorListaViewModel>
+            {
+                Items = new List<ColaboradorListaViewModel>
+                {
+                    new ColaboradorListaViewModel { Id = 1, Nome = "Teste" }
+                },
+                Page = 1,
+                PageSize = 10,
+                TotalItems = 1
+            };
+
+            mockService
+                .Setup(s => s.GetAllColaboradores(It.IsAny<QueryParameters>()))
+                .ReturnsAsync(pagedResult);
 
             var controller = new ColaboradoresController(mockService.Object);
 
             // Act
-            var result = await controller.GetColaboradores();
+            var result = await controller.GetColaboradores(new QueryParameters());
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
 
             // Assert
             Assert.Equal(200, okResult.StatusCode);
-            Assert.IsAssignableFrom<IEnumerable<Colaborador>>(okResult.Value);
+            Assert.IsType<PagedResultViewModel<ColaboradorListaViewModel>>(okResult.Value);
         }
 
-        // GET /api/Colaboradores/{id}
-        [Fact]
+       [Fact]
         public async Task GetColaboradorById_Returns200_WhenFound()
         {
             // Arrange
@@ -64,5 +77,61 @@ namespace Fiap.Api.InclusaoDiversidadeEmpresas.testes
             Assert.Equal(200, okResult.StatusCode);
             Assert.Equal(colaborador, okResult.Value);
         }
+
+
+      [Fact]
+        public async Task PostColaborador_Returns201AndCreatedObject()
+        {
+            // Arrange
+            var mockService = new Mock<IColaboradorService>();
+            var colaborador = CriarColaboradorFake();
+
+            mockService.Setup(s => s.AddColaborador(colaborador))
+                .ReturnsAsync(colaborador);
+
+            var controller = new ColaboradoresController(mockService.Object);
+
+            // Act
+            var result = await controller.PostColaborador(colaborador);
+            var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
+
+            // Assert
+            Assert.Equal(201, createdResult.StatusCode);
+            Assert.Equal(colaborador, createdResult.Value);
+        }
+
+       [Fact]
+        public async Task PutColaborador_ReturnsNoContent_WhenUpdated()
+        {
+            // Arrange
+            var mockService = new Mock<IColaboradorService>();
+            var colaborador = CriarColaboradorFake();
+
+            mockService.Setup(s => s.UpdateColaborador(colaborador))
+                .ReturnsAsync(colaborador);
+
+            var controller = new ColaboradoresController(mockService.Object);
+
+            // Act
+            var result = await controller.PutColaborador(1, colaborador);
+
+            // Assert
+            Assert.IsType<NoContentResult>(result);
+        }
+
+      [Fact]
+        public async Task DeleteColaborador_ReturnsNoContent_WhenDeleted()
+        {
+            var mockService = new Mock<IColaboradorService>();
+
+            mockService.Setup(s => s.DeleteColaborador(1)).ReturnsAsync(true);
+
+            var controller = new ColaboradoresController(mockService.Object);
+
+            var result = await controller.DeleteColaborador(1);
+
+            Assert.IsType<NoContentResult>(result);
+        }
+
     }
 }

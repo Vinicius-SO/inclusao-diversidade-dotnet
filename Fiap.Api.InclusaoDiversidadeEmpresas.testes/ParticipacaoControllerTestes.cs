@@ -1,76 +1,116 @@
-﻿using Fiap.Api.InclusaoDiversidadeEmpresas.Controllers;
+﻿using AutoMapper;
+using Fiap.Api.InclusaoDiversidadeEmpresas.Controllers;
 using Fiap.Api.InclusaoDiversidadeEmpresas.Services;
+using Fiap.Api.InclusaoDiversidadeEmpresas.ViewModel;
 using InclusaoDiversidadeEmpresas.Models;
+using InclusaoDiversidadeEmpresas.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 
-namespace Fiap.Api.InclusaoDiversidadeEmpresas.testes
+namespace Fiap.Api.InclusaoDiversidadeEmpresas.Testes
 {
-    public class ParticipacaoEmTreinamentoControllerTests
+    public class ParticipacaoControllerTests
     {
+        private readonly Mock<IParticipacaoEmTreinamentoService> _serviceMock;
+        private readonly Mock<IMapper> _mapperMock;
+        private readonly ParticipacaoController _controller;
+
+        public ParticipacaoControllerTests()
+        {
+            _serviceMock = new Mock<IParticipacaoEmTreinamentoService>();
+            _mapperMock = new Mock<IMapper>();
+
+            _controller = new ParticipacaoController(
+                _serviceMock.Object,
+                _mapperMock.Object
+            );
+        }
+
         [Fact]
-        public async Task GetParticipacoes_ReturnsHttpStatusCode200()
+        public async Task Listar_ReturnsOkWithData()
         {
             // Arrange
-            var mockService = new Mock<IParticipacaoEmTreinamentoService>();
+            var modelos = new List<ParticipacaoEmTreinamentoModel>
+            {
+                new ParticipacaoEmTreinamentoModel { Id = 1 }
+            };
 
-            mockService
-                .Setup(s => s.ListarParticipacaoEmTreinamentoService())
-                .ReturnsAsync(new List<ParticipacaoEmTreinamentoModel>());
+            var viewModels = new List<ParticipacaoViewModel>
+            {
+                new ParticipacaoViewModel { ColaboradorId = 1, TreinamentoId = 1, Completo = false }
+            };
 
-            var controller = new ParticipacaoEmTreinamentoController(mockService.Object);
+            _serviceMock
+                .Setup(s => s.ListarParticipacaoPaginado(1, 10))
+                .ReturnsAsync(modelos);
+
+            _mapperMock
+                .Setup(m => m.Map<IEnumerable<ParticipacaoViewModel>>(modelos))
+                .Returns(viewModels);
 
             // Act
-            var result = await controller.GetParticipacoes();
+            var result = await _controller.Listar(1, 10);
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
 
             // Assert
             Assert.Equal(200, okResult.StatusCode);
-            Assert.IsAssignableFrom<IEnumerable<ParticipacaoEmTreinamentoModel>>(okResult.Value);
+            Assert.Equal(viewModels, okResult.Value);
         }
 
         [Fact]
-        public async Task GetParticipacaoById_ReturnsHttpStatusCode200()
+        public async Task Criar_ReturnsOkWithCreatedObject()
         {
             // Arrange
-            var mockService = new Mock<IParticipacaoEmTreinamentoService>();
-            var participacao = new ParticipacaoEmTreinamentoModel { Id = 1 };
+            var vm = new ParticipacaoViewModel { ColaboradorId = 1, TreinamentoId = 1, Completo = false };
+            var model = new ParticipacaoEmTreinamentoModel { Id = 1 };
 
-            mockService
-                .Setup(s => s.ObterParticipacaoEmTreinamentoServicePorId(1))
-                .ReturnsAsync(participacao);
+            _mapperMock.Setup(m => m.Map<ParticipacaoEmTreinamentoModel>(vm))
+                .Returns(model);
 
-            var controller = new ParticipacaoEmTreinamentoController(mockService.Object);
+            _serviceMock
+                .Setup(s => s.CriarParticipacaoEmTreinamentoService(model))
+                .ReturnsAsync(model);
+
+            _mapperMock.Setup(m => m.Map<ParticipacaoViewModel>(model))
+                .Returns(vm);
 
             // Act
-            var result = await controller.GetParticipacao(1);
+            var result = await _controller.Criar(vm);
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
 
             // Assert
             Assert.Equal(200, okResult.StatusCode);
-            Assert.Equal(participacao, okResult.Value);
+            Assert.Equal(vm, okResult.Value);
         }
 
         [Fact]
-        public async Task PostParticipacao_ReturnsHttpStatusCode201()
+        public async Task Deletar_ReturnsNoContent_WhenRemoved()
         {
             // Arrange
-            var mockService = new Mock<IParticipacaoEmTreinamentoService>();
-            var novaParticipacao = new ParticipacaoEmTreinamentoModel { Id = 1 };
-
-            mockService
-                .Setup(s => s.CriarParticipacaoEmTreinamentoService(novaParticipacao))
-                .ReturnsAsync(novaParticipacao);
-
-            var controller = new ParticipacaoEmTreinamentoController(mockService.Object);
+            _serviceMock
+                .Setup(s => s.DeletarParticipacaoEmTreinamentoService(1))
+                .ReturnsAsync(true);
 
             // Act
-            var result = await controller.PostParticipacao(novaParticipacao);
-            var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
+            var result = await _controller.Deletar(1);
 
             // Assert
-            Assert.Equal(201, createdResult.StatusCode);
-            Assert.Equal(novaParticipacao, createdResult.Value);
+            Assert.IsType<NoContentResult>(result);
+        }
+
+        [Fact]
+        public async Task Deletar_ReturnsNotFound_WhenNotRemoved()
+        {
+            // Arrange
+            _serviceMock
+                .Setup(s => s.DeletarParticipacaoEmTreinamentoService(1))
+                .ReturnsAsync(false);
+
+            // Act
+            var result = await _controller.Deletar(1);
+
+            // Assert
+            Assert.IsType<NotFoundResult>(result);
         }
     }
 }

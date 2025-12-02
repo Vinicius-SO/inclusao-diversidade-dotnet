@@ -13,23 +13,20 @@ namespace Fiap.Api.InclusaoDiversidadeEmpresas.Services
             _databaseContext = databaseContext;
         }
 
-        public async Task<ParticipacaoEmTreinamentoModel?> AtualizarParticipacaoEmTreinamentoService(ParticipacaoEmTreinamentoModel participacaoEmTreinamento)
+        public async Task<ParticipacaoEmTreinamentoModel?> AtualizarParticipacaoEmTreinamentoService(long id, ParticipacaoEmTreinamentoModel model)
         {
-            _databaseContext.ParticipacoesEmTreinamento.Update(participacaoEmTreinamento);
+            var existente = await _databaseContext.ParticipacoesEmTreinamento.FindAsync(id);
 
-            try
-            {
-                await _databaseContext.SaveChangesAsync();
-                return participacaoEmTreinamento;
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!await _databaseContext.ParticipacoesEmTreinamento.AnyAsync(e => e.Id == participacaoEmTreinamento.Id))
-                {
-                    return null;
-                }
-                throw;
-            }
+            if (existente == null)
+                return null;
+
+            existente.ColaboradorId = model.ColaboradorId;
+            existente.TreinamentoId = model.TreinamentoId;
+            existente.Completo = model.Completo;
+            existente.DataDeConclusao = model.DataDeConclusao;
+
+            await _databaseContext.SaveChangesAsync();
+            return existente;
         }
 
         public async Task<ParticipacaoEmTreinamentoModel> CriarParticipacaoEmTreinamentoService(ParticipacaoEmTreinamentoModel participacaoEmTreinamento)
@@ -52,11 +49,14 @@ namespace Fiap.Api.InclusaoDiversidadeEmpresas.Services
             return true;
         }
 
-        public async  Task<IEnumerable<ParticipacaoEmTreinamentoModel>> ListarParticipacaoEmTreinamentoService()
+        public async Task<IEnumerable<ParticipacaoEmTreinamentoModel>> ListarParticipacaoPaginado(int pagina, int tamanho)
         {
             return await _databaseContext.ParticipacoesEmTreinamento
                 .Include(p => p.Colaborador)
                 .Include(p => p.Treinamento)
+                .OrderBy(p => p.Id)
+                .Skip((pagina - 1) * tamanho)
+                .Take(tamanho)
                 .ToListAsync();
         }
 

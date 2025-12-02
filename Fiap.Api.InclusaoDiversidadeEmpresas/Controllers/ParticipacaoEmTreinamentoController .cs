@@ -1,87 +1,77 @@
-﻿using Fiap.Api.InclusaoDiversidadeEmpresas.Services;
+﻿using AutoMapper;
+using Fiap.Api.InclusaoDiversidadeEmpresas.Services;
+using Fiap.Api.InclusaoDiversidadeEmpresas.ViewModel;
 using InclusaoDiversidadeEmpresas.Models;
-using Microsoft.AspNetCore.Mvc;
+using InclusaoDiversidadeEmpresas.ViewModels;
 using Microsoft.AspNetCore.Authorization; 
+using Microsoft.AspNetCore.Mvc;
 
 namespace Fiap.Api.InclusaoDiversidadeEmpresas.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
-    public class ParticipacaoEmTreinamentoController : ControllerBase
+    [ApiController]
+    public class ParticipacaoController : ControllerBase
     {
-        private readonly IParticipacaoEmTreinamentoService _participacaoService;
+        private readonly IParticipacaoEmTreinamentoService _service;
+        private readonly IMapper _mapper;
 
-        public ParticipacaoEmTreinamentoController(IParticipacaoEmTreinamentoService participacaoService)
+        public ParticipacaoController(
+            IParticipacaoEmTreinamentoService service,
+            IMapper mapper)
         {
-            _participacaoService = participacaoService;
+            _service = service;
+            _mapper = mapper;
         }
 
-
-        // GET: api/participacaoemtreinamento
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<ParticipacaoEmTreinamentoModel>>> GetParticipacoes()
-        {
-            return Ok(await _participacaoService.ListarParticipacaoEmTreinamentoService());
-        }
-
-        // GET: api/participacaoemtreinamento/{id}
-        [HttpGet("{id}")]
-        public async Task<ActionResult<ParticipacaoEmTreinamentoModel>> GetParticipacao(long id)
-        {
-            var participacao = await _participacaoService.ObterParticipacaoEmTreinamentoServicePorId(id);
-
-            if (participacao == null)
-                return NotFound();
-
-            return Ok(participacao);
-        }
-
-    
-
-        // POST: api/participacaoemtreinamento
+        // POST
+        [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<ActionResult<ParticipacaoEmTreinamentoModel>> PostParticipacao(
-            ParticipacaoEmTreinamentoModel participacao)
+        public async Task<ActionResult<ParticipacaoViewModel>> Criar(ParticipacaoViewModel vm)
         {
-            var criado = await _participacaoService.CriarParticipacaoEmTreinamentoService(participacao);
+            var model = _mapper.Map<ParticipacaoEmTreinamentoModel>(vm);
 
-            return CreatedAtAction(nameof(GetParticipacao), new { id = criado.Id }, criado);
+            var criado = await _service.CriarParticipacaoEmTreinamentoService(model);
+
+            return Ok(_mapper.Map<ParticipacaoViewModel>(criado));
         }
 
-     
-
-        // PUT: api/participacaoemtreinamento/{id}
-        [HttpPut("{id}")]
-        public async Task<ActionResult<ParticipacaoEmTreinamentoModel>> PutParticipacao(
-            long id,
-            ParticipacaoEmTreinamentoModel participacao)
+        // GET paginado
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<ParticipacaoViewModel>>> Listar(
+            int page = 1, int pageSize = 10)
         {
-            if (id != participacao.Id)
-                return BadRequest("O ID informado não corresponde ao objeto enviado.");
+            var dados = await _service.ListarParticipacaoPaginado(page, pageSize);
 
-            var atualizado = await _participacaoService.AtualizarParticipacaoEmTreinamentoService(participacao);
+            return Ok(_mapper.Map<IEnumerable<ParticipacaoViewModel>>(dados));
+        }
+
+        // PUT
+        [Authorize(Roles = "Admin")]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Atualizar(long id, ParticipacaoViewModel vm)
+        {
+            var model = _mapper.Map<ParticipacaoEmTreinamentoModel>(vm);
+
+            var atualizado = await _service.AtualizarParticipacaoEmTreinamentoService(id, model);
 
             if (atualizado == null)
                 return NotFound();
 
-            return Ok(atualizado);
+            return Ok(_mapper.Map<ParticipacaoViewModel>(atualizado));
         }
 
-
-        // DELETE: api/participacaoemtreinamento/{id}
+        // DELETE
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")] 
-        public async Task<IActionResult> DeleteParticipacao(long id)
+        public async Task<IActionResult> Deletar(long id)
         {
-            var removido = await _participacaoService.DeletarParticipacaoEmTreinamentoService(id);
+            var removido = await _service.DeletarParticipacaoEmTreinamentoService(id);
 
             if (!removido)
                 return NotFound();
 
             return NoContent();
         }
-
     }
 
 

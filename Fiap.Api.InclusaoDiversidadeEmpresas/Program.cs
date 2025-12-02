@@ -1,15 +1,16 @@
 ﻿using AutoMapper;
 using Fiap.Api.InclusaoDiversidadeEmpresas.Services;
 using InclusaoDiversidadeEmpresas.Data;
+using InclusaoDiversidadeEmpresas.Models;
 using InclusaoDiversidadeEmpresas.Services;
-using Microsoft.EntityFrameworkCore;
-using System.Text.Json.Serialization;
-
+using InclusaoDiversidadeEmpresas.ViewModels;
 // 🔑 USINGS NECESSÁRIOS PARA JWT
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using System;
+using System.Text;
+using System.Text.Json.Serialization;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -51,7 +52,11 @@ var mapperConfig = new MapperConfiguration(c =>
     c.AllowNullCollections = true;
     c.AllowNullDestinationValues = true;
 
-
+    // Mapeamentos
+    c.CreateMap<TreinamentoModel, TreinamentoViewModel>();
+    c.CreateMap<TreinamentoViewModel, TreinamentoModel>();
+    c.CreateMap<ParticipacaoEmTreinamentoModel, ParticipacaoViewModel>();
+    c.CreateMap<ParticipacaoViewModel, ParticipacaoEmTreinamentoModel>();
 });
 
 IMapper mapper = mapperConfig.CreateMapper();

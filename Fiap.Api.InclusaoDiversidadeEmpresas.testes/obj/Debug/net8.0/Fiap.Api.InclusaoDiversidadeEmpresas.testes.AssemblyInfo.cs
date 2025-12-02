@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Fiap.Api.InclusaoDiversidadeEmpresas.testes")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+683b6c021556b5acdb87262141abe2a46d19f1a6")]
 [assembly: System.Reflection.AssemblyProductAttribute("Fiap.Api.InclusaoDiversidadeEmpresas.testes")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Fiap.Api.InclusaoDiversidadeEmpresas.testes")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -1,0 +1,238 @@
+name: CI/CD Pipeline - Inclusão e Diversidade .NET
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ==========================================
+  # Job 1: Build and Test
+  # ==========================================
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout do código fonte
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2: Configurar .NET 8 SDK
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Step 3: Restaurar dependências
+      - name: Restore dependencies
+        run: dotnet restore
+
+      # Step 4: Compilar o projeto
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      # Step 5: Executar testes com relatório TRX para evidência
+      - name: Run tests
+        run: |
+          dotnet test Fiap.Api.InclusaoDiversidadeEmpresas.testes/ \
+            --configuration Release \
+            --no-build \
+            --verbosity normal \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory ./TestResults
+
+      # Step 6: Publicar relatório de testes como artefato (evidência para o PDF)
+      - name: Publish test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: ./TestResults/*.trx
+
+  # ==========================================
+  # Job 2: Build Docker Image
+  # ==========================================
+  build-docker:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # Step 1: Checkout do código fonte
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2: Login no GitHub Container Registry
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 3: Extrair metadados para as tags
+      # Correção: sintaxe nativa da metadata-action, sem ${{ }} dentro do bloco tags
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=staging,enable={{is_default_branch == false}},priority=200
+            type=raw,value=latest,enable={{is_default_branch}},priority=100
+
+      # Step 4: Build e push da imagem Docker
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Fiap.Api.InclusaoDiversidadeEmpresas
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+  # ==========================================
+  # Job 3: Deploy Staging
+  # ==========================================
+  deploy-staging:
+    needs: build-docker
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # Step 1: Checkout para ter acesso ao docker-compose.yml
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2: Login no registry para pull da imagem
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 3: Login na Oracle Container Registry para pull do banco
+      - name: Login to Oracle Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: container-registry.oracle.com
+          username: ${{ secrets.ORACLE_REGISTRY_USER }}
+          password: ${{ secrets.ORACLE_REGISTRY_PASSWORD }}
+
+      # Step 4: Criar .env de staging a partir dos secrets do GitHub
+      - name: Create staging .env
+        run: |
+          cat > .env << EOF
+          ASPNETCORE_ENVIRONMENT=Staging
+          DB_HOST=db
+          DB_PORT=1521
+          DB_NAME=ORCL
+          ORACLE_PASSWORD=${{ secrets.ORACLE_PASSWORD }}
+          EOF
+
+      # Step 5: Correção — deploy usando docker compose com Oracle incluso
+      - name: Deploy to staging with Docker Compose
+        run: |
+          docker compose -p inclusao-staging \
+            -f docker-compose.yml \
+            up -d --pull always
+
+      # Step 6: Verificar containers em execução (evidência para o PDF)
+      - name: Health check staging
+        run: |
+          sleep 30
+          docker compose -p inclusao-staging ps
+          docker compose -p inclusao-staging logs app --tail=50
+
+  # ==========================================
+  # Job 4: Deploy Production
+  # ==========================================
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production # Exige aprovação manual no GitHub
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # Step 1: Checkout para ter acesso ao docker-compose.yml
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2: Login no registry para pull da imagem
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 3: Login na Oracle Container Registry para pull do banco
+      - name: Login to Oracle Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: container-registry.oracle.com
+          username: ${{ secrets.ORACLE_REGISTRY_USER }}
+          password: ${{ secrets.ORACLE_REGISTRY_PASSWORD }}
+
+      # Step 4: Criar .env de produção a partir dos secrets do GitHub
+      - name: Create production .env
+        run: |
+          cat > .env << EOF
+          ASPNETCORE_ENVIRONMENT=Production
+          DB_HOST=db
+          DB_PORT=1521
+          DB_NAME=ORCL
+          ORACLE_PASSWORD=${{ secrets.ORACLE_PASSWORD }}
+          EOF
+
+      # Step 5: Deploy usando docker compose com Oracle incluso
+      - name: Deploy to production with Docker Compose
+        run: |
+          docker compose -p inclusao-production \
+            -f docker-compose.yml \
+            up -d --pull always
+
+      # Step 6: Verificar containers em execução (evidência para o PDF)
+      - name: Health check production
+        run: |
+          sleep 30
+          docker compose -p inclusao-production ps
+          docker compose -p inclusao-production logs app --tail=50
+
+  # ==========================================
+  # Job 5: Notificações
+  # ==========================================
+  notify:
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resumo do pipeline
+        run: |
+          echo "==============================="
+          echo "  Pipeline finalizado!"
+          echo "==============================="
+          echo "Repositório : ${{ github.repository }}"
+          echo "Branch      : ${{ github.ref_name }}"
+          echo "Commit      : ${{ github.sha }}"
+          echo "Staging     : ${{ needs.deploy-staging.result }}"
+          echo "Production  : ${{ needs.deploy-production.result }}"
+          echo "==============================="

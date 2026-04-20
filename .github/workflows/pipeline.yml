@@ -81,7 +81,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Step 3: Extrair metadados para as tags
-      # Correção: sintaxe nativa da metadata-action, sem ${{ }} dentro do bloco tags
+      # tag :latest gerada na main, tag :develop (ou branch name) nas demais
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -91,8 +91,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha,prefix={{branch}}-
-            type=raw,value=staging,enable={{is_default_branch == false}},priority=200
-            type=raw,value=latest,enable={{is_default_branch}},priority=100
+            type=raw,value=latest,enable={{is_default_branch}}
 
       # Step 4: Build e push da imagem Docker
       - name: Build and push Docker image

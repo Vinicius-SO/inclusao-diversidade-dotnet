@@ -2,9 +2,9 @@ name: CI/CD Pipeline - Inclusão e Diversidade .NET
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 env:
   REGISTRY: ghcr.io
@@ -26,7 +26,7 @@ jobs:
       - name: Setup .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: "8.0.x"
 
       # Step 3: Restaurar dependências — aponta direto ao .csproj pois não há .sln na raiz
       - name: Restore dependencies
@@ -84,13 +84,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 4: Extrair metadados para as tags
+      # Step 4: Converter nome do repositório para lowercase (obrigatório para tags Docker)
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      # Step 5: Extrair metadados para as tags
       # tag :latest gerada na main, tag :develop (ou branch name) nas demais
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -105,8 +109,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:buildcache,mode=max
 
   # ==========================================
   # Job 3: Deploy Staging
@@ -171,7 +175,7 @@ jobs:
   deploy-production:
     needs: deploy-staging
     runs-on: ubuntu-latest
-    environment: production  # Exige aprovação manual no GitHub
+    environment: production # Exige aprovação manual no GitHub
     permissions:
       contents: read
       packages: write
@@ -226,7 +230,7 @@ jobs:
   # Job 5: Notificações
   # ==========================================
   notify:
-    needs: [ deploy-staging, deploy-production ]
+    needs: [deploy-staging, deploy-production]
     if: always()
     runs-on: ubuntu-latest
 

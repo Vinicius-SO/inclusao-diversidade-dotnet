@@ -28,20 +28,23 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      # Step 3: Restaurar dependências
+      # Step 3: Restaurar dependências — aponta direto ao .csproj pois não há .sln na raiz
       - name: Restore dependencies
-        run: dotnet restore
+        run: |
+          dotnet restore Fiap.Api.InclusaoDiversidadeEmpresas/Fiap.Api.InclusaoDiversidadeEmpresas.csproj
+          dotnet restore Fiap.Api.InclusaoDiversidadeEmpresas.testes/Fiap.Api.InclusaoDiversidadeEmpresas.testes.csproj
 
       # Step 4: Compilar o projeto
       - name: Build
-        run: dotnet build --configuration Release --no-restore
+        run: |
+          dotnet build Fiap.Api.InclusaoDiversidadeEmpresas/Fiap.Api.InclusaoDiversidadeEmpresas.csproj \
+            --configuration Release --no-restore
 
       # Step 5: Executar testes com relatório TRX para evidência
       - name: Run tests
         run: |
-          dotnet test Fiap.Api.InclusaoDiversidadeEmpresas.testes/ \
+          dotnet test Fiap.Api.InclusaoDiversidadeEmpresas.testes/Fiap.Api.InclusaoDiversidadeEmpresas.testes.csproj \
             --configuration Release \
-            --no-build \
             --verbosity normal \
             --logger "trx;LogFileName=test-results.trx" \
             --results-directory ./TestResults

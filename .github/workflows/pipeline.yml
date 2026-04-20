@@ -2,9 +2,9 @@ name: CI/CD Pipeline - Inclusão e Diversidade .NET
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, develop ]
   pull_request:
-    branches: [main, develop]
+    branches: [ main, develop ]
 
 env:
   REGISTRY: ghcr.io
@@ -26,7 +26,7 @@ jobs:
       - name: Setup .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: '8.0.x'
 
       # Step 3: Restaurar dependências — aponta direto ao .csproj pois não há .sln na raiz
       - name: Restore dependencies
@@ -94,7 +94,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
+            type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
       # Step 4: Build e push da imagem Docker
@@ -171,7 +171,7 @@ jobs:
   deploy-production:
     needs: deploy-staging
     runs-on: ubuntu-latest
-    environment: production # Exige aprovação manual no GitHub
+    environment: production  # Exige aprovação manual no GitHub
     permissions:
       contents: read
       packages: write
@@ -226,7 +226,7 @@ jobs:
   # Job 5: Notificações
   # ==========================================
   notify:
-    needs: [deploy-staging, deploy-production]
+    needs: [ deploy-staging, deploy-production ]
     if: always()
     runs-on: ubuntu-latest
 

@@ -89,7 +89,6 @@ jobs:
         run: echo "IMAGE_NAME_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       # Step 5: Extrair metadados para as tags
-      # tag :latest gerada na main, tag :develop (ou branch name) nas demais
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -101,7 +100,7 @@ jobs:
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # Step 4: Build e push da imagem Docker
+      # Step 6: Build e push da imagem Docker
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -121,14 +120,14 @@ jobs:
     environment: staging
     permissions:
       contents: read
-      packages: write
+      packages: read
 
     steps:
-      # Step 1: Checkout para ter acesso ao docker-compose.yml
+      # Step 1: Checkout do código fonte
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Step 2: Login no registry para pull da imagem
+      # Step 2: Login no GitHub Container Registry
       - name: Login to Container Registry
         uses: docker/login-action@v3
         with:
@@ -136,38 +135,54 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 3: Login na Oracle Container Registry para pull do banco
-      - name: Login to Oracle Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: container-registry.oracle.com
-          username: ${{ secrets.ORACLE_REGISTRY_USER }}
-          password: ${{ secrets.ORACLE_REGISTRY_PASSWORD }}
+      # Step 3: Converter nome da imagem para lowercase
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # Step 4: Criar .env de staging a partir dos secrets do GitHub
-      - name: Create staging .env
+      # Step 4: Pull da imagem gerada no job anterior
+      - name: Pull staging image
         run: |
-          cat > .env << EOF
-          ASPNETCORE_ENVIRONMENT=Staging
-          DB_HOST=db
-          DB_PORT=1521
-          DB_NAME=ORCL
-          ORACLE_PASSWORD=${{ secrets.ORACLE_PASSWORD }}
-          EOF
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:develop || \
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:main || \
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
 
-      # Step 5: Correção — deploy usando docker compose com Oracle incluso
-      - name: Deploy to staging with Docker Compose
+      # Step 5: Parar container anterior se existir
+      - name: Stop existing staging container
         run: |
-          docker compose -p inclusao-staging \
-            -f docker-compose.yml \
-            up -d --pull always
+          docker stop inclusao-staging || true
+          docker rm inclusao-staging || true
 
-      # Step 6: Verificar containers em execução (evidência para o PDF)
+      # Step 6: Subir container de staging na porta 8081
+      - name: Run staging container
+        run: |
+          docker run -d \
+            --name inclusao-staging \
+            -p 8081:8080 \
+            -e ASPNETCORE_ENVIRONMENT=Staging \
+            -e ASPNETCORE_URLS=http://+:8080 \
+            -e JwtSettings__SecretKey=${{ secrets.JWT_SECRET_KEY }} \
+            -e JwtSettings__Issuer=Fiap.Api.InclusaoDiversidadeEmpresas \
+            -e JwtSettings__Audience=UsuariosDaApiFiap \
+            -e AdminCredentials__Email=admin@fiap.com \
+            -e AdminCredentials__Senha=${{ secrets.ADMIN_PASSWORD }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:develop || \
+          docker run -d \
+            --name inclusao-staging \
+            -p 8081:8080 \
+            -e ASPNETCORE_ENVIRONMENT=Staging \
+            -e ASPNETCORE_URLS=http://+:8080 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
+
+      # Step 7: Verificar container em execução (evidência para o PDF)
       - name: Health check staging
         run: |
-          sleep 30
-          docker compose -p inclusao-staging ps
-          docker compose -p inclusao-staging logs app --tail=50
+          sleep 10
+          echo "========================================="
+          echo "  Containers em execução — Staging"
+          echo "========================================="
+          docker ps --filter "name=inclusao-staging"
+          echo "-----------------------------------------"
+          docker logs inclusao-staging --tail=30
 
   # ==========================================
   # Job 4: Deploy Production
@@ -175,17 +190,17 @@ jobs:
   deploy-production:
     needs: deploy-staging
     runs-on: ubuntu-latest
-    environment: production # Exige aprovação manual no GitHub
+    environment: production
     permissions:
       contents: read
-      packages: write
+      packages: read
 
     steps:
-      # Step 1: Checkout para ter acesso ao docker-compose.yml
+      # Step 1: Checkout do código fonte
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Step 2: Login no registry para pull da imagem
+      # Step 2: Login no GitHub Container Registry
       - name: Login to Container Registry
         uses: docker/login-action@v3
         with:
@@ -193,38 +208,45 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 3: Login na Oracle Container Registry para pull do banco
-      - name: Login to Oracle Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: container-registry.oracle.com
-          username: ${{ secrets.ORACLE_REGISTRY_USER }}
-          password: ${{ secrets.ORACLE_REGISTRY_PASSWORD }}
+      # Step 3: Converter nome da imagem para lowercase
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # Step 4: Criar .env de produção a partir dos secrets do GitHub
-      - name: Create production .env
+      # Step 4: Pull da imagem de produção (latest)
+      - name: Pull production image
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
+
+      # Step 5: Parar container anterior se existir
+      - name: Stop existing production container
         run: |
-          cat > .env << EOF
-          ASPNETCORE_ENVIRONMENT=Production
-          DB_HOST=db
-          DB_PORT=1521
-          DB_NAME=ORCL
-          ORACLE_PASSWORD=${{ secrets.ORACLE_PASSWORD }}
-          EOF
+          docker stop inclusao-production || true
+          docker rm inclusao-production || true
 
-      # Step 5: Deploy usando docker compose com Oracle incluso
-      - name: Deploy to production with Docker Compose
+      # Step 6: Subir container de produção na porta 8080
+      - name: Run production container
         run: |
-          docker compose -p inclusao-production \
-            -f docker-compose.yml \
-            up -d --pull always
+          docker run -d \
+            --name inclusao-production \
+            -p 8080:8080 \
+            -e ASPNETCORE_ENVIRONMENT=Production \
+            -e ASPNETCORE_URLS=http://+:8080 \
+            -e JwtSettings__SecretKey=${{ secrets.JWT_SECRET_KEY }} \
+            -e JwtSettings__Issuer=Fiap.Api.InclusaoDiversidadeEmpresas \
+            -e JwtSettings__Audience=UsuariosDaApiFiap \
+            -e AdminCredentials__Email=admin@fiap.com \
+            -e AdminCredentials__Senha=${{ secrets.ADMIN_PASSWORD }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
 
-      # Step 6: Verificar containers em execução (evidência para o PDF)
+      # Step 7: Verificar container em execução (evidência para o PDF)
       - name: Health check production
         run: |
-          sleep 30
-          docker compose -p inclusao-production ps
-          docker compose -p inclusao-production logs app --tail=50
+          sleep 10
+          echo "========================================="
+          echo "  Containers em execução — Production"
+          echo "========================================="
+          docker ps --filter "name=inclusao-production"
+          echo "-----------------------------------------"
+          docker logs inclusao-production --tail=30
 
   # ==========================================
   # Job 5: Notificações

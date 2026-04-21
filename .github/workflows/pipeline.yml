@@ -136,13 +136,13 @@ jobs:
       - name: Set lowercase image name
         run: echo "IMAGE_NAME_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # Updated: Use the short SHA tag that was built
+     # Updated: Adicionado o prefixo 'sha-' na tag do pull
       - name: Pull staging image
         run: |
           BRANCH_NAME="${{ github.ref_name }}"
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
 
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${SHORT_SHA} || \
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:sha-${SHORT_SHA} || \
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${BRANCH_NAME} || \
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest || \
           (echo "ERROR: No image found in registry" && exit 1)
@@ -152,6 +152,7 @@ jobs:
           docker stop inclusao-staging || true
           docker rm inclusao-staging || true
 
+      # Updated: Adicionado o prefixo 'sha-' na tag do docker run
       - name: Run staging container
         run: |
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
@@ -165,7 +166,7 @@ jobs:
             -e JwtSettings__Audience=UsuariosDaApiFiap \
             -e AdminCredentials__Email=admin@fiap.com \
             -e AdminCredentials__Senha=${{ secrets.ADMIN_PASSWORD }} \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${SHORT_SHA}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:sha-${SHORT_SHA}
 
       - name: Health check staging
         run: |

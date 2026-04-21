@@ -123,11 +123,9 @@ jobs:
       packages: read
 
     steps:
-      # Step 1: Checkout do código fonte
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Step 2: Login no GitHub Container Registry
       - name: Login to Container Registry
         uses: docker/login-action@v3
         with:
@@ -135,26 +133,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 3: Converter nome da imagem para lowercase
       - name: Set lowercase image name
         run: echo "IMAGE_NAME_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # Step 4: Pull da imagem gerada no job anterior
+      # Updated: Use the short SHA tag that was built
       - name: Pull staging image
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:develop || \
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:main || \
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
+          BRANCH_NAME="${{ github.ref_name }}"
+          SHORT_SHA="${{ github.sha }}" | cut -c1-7
 
-      # Step 5: Parar container anterior se existir
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${SHORT_SHA} || \
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${BRANCH_NAME} || \
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest || \
+          (echo "ERROR: No image found in registry" && exit 1)
+
       - name: Stop existing staging container
         run: |
           docker stop inclusao-staging || true
           docker rm inclusao-staging || true
 
-      # Step 6: Subir container de staging na porta 8081
       - name: Run staging container
         run: |
+          SHORT_SHA="${{ github.sha }}" | cut -c1-7
           docker run -d \
             --name inclusao-staging \
             -p 8081:8080 \
@@ -165,15 +165,8 @@ jobs:
             -e JwtSettings__Audience=UsuariosDaApiFiap \
             -e AdminCredentials__Email=admin@fiap.com \
             -e AdminCredentials__Senha=${{ secrets.ADMIN_PASSWORD }} \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:develop || \
-          docker run -d \
-            --name inclusao-staging \
-            -p 8081:8080 \
-            -e ASPNETCORE_ENVIRONMENT=Staging \
-            -e ASPNETCORE_URLS=http://+:8080 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${SHORT_SHA}
 
-      # Step 7: Verificar container em execução (evidência para o PDF)
       - name: Health check staging
         run: |
           sleep 10

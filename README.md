@@ -37,7 +37,6 @@ cd inclusao-diversidade-dotnet
 cp .env.example .env
 
 # 4. Edite o arquivo .env com suas configurações
-# Verifique as variáveis na seção abaixo
 
 # 5. Inicie os containers
 docker compose up --build -d

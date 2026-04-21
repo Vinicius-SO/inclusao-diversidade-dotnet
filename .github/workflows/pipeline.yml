@@ -1,0 +1,263 @@
+name: CI/CD Pipeline - Inclusão e Diversidade .NET
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ==========================================
+  # Job 1: Build and Test
+  # ==========================================
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout do código fonte
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2: Configurar .NET 8 SDK
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Step 3: Restaurar dependências — aponta direto ao .csproj pois não há .sln na raiz
+      - name: Restore dependencies
+        run: |
+          dotnet restore Fiap.Api.InclusaoDiversidadeEmpresas/Fiap.Api.InclusaoDiversidadeEmpresas.csproj
+          dotnet restore Fiap.Api.InclusaoDiversidadeEmpresas.testes/Fiap.Api.InclusaoDiversidadeEmpresas.testes.csproj
+
+      # Step 4: Compilar o projeto
+      - name: Build
+        run: |
+          dotnet build Fiap.Api.InclusaoDiversidadeEmpresas/Fiap.Api.InclusaoDiversidadeEmpresas.csproj \
+            --configuration Release --no-restore
+
+      # Step 5: Executar testes com relatório TRX para evidência
+      - name: Run tests
+        run: |
+          dotnet test Fiap.Api.InclusaoDiversidadeEmpresas.testes/Fiap.Api.InclusaoDiversidadeEmpresas.testes.csproj \
+            --configuration Release \
+            --verbosity normal \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory ./TestResults
+
+      # Step 6: Publicar relatório de testes como artefato (evidência para o PDF)
+      - name: Publish test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: ./TestResults/*.trx
+
+  # ==========================================
+  # Job 2: Build Docker Image
+  # ==========================================
+  build-docker:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # Step 1: Checkout do código fonte
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2: Configurar Buildx — necessário para suporte a cache via registry
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Step 3: Login no GitHub Container Registry
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 4: Converter nome do repositório para lowercase (obrigatório para tags Docker)
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      # Step 5: Extrair metadados para as tags
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # Step 6: Build e push da imagem Docker
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Fiap.Api.InclusaoDiversidadeEmpresas
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:buildcache,mode=max
+
+  # ==========================================
+  # Job 3: Deploy Staging
+  # ==========================================
+  deploy-staging:
+    needs: build-docker
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      # Updated: Use the short SHA tag that was built
+      - name: Pull staging image
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          SHORT_SHA="${{ github.sha }}" | cut -c1-7
+
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${SHORT_SHA} || \
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${BRANCH_NAME} || \
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest || \
+          (echo "ERROR: No image found in registry" && exit 1)
+
+      - name: Stop existing staging container
+        run: |
+          docker stop inclusao-staging || true
+          docker rm inclusao-staging || true
+
+      - name: Run staging container
+        run: |
+          SHORT_SHA="${{ github.sha }}" | cut -c1-7
+          docker run -d \
+            --name inclusao-staging \
+            -p 8081:8080 \
+            -e ASPNETCORE_ENVIRONMENT=Staging \
+            -e ASPNETCORE_URLS=http://+:8080 \
+            -e JwtSettings__SecretKey=${{ secrets.JWT_SECRET_KEY }} \
+            -e JwtSettings__Issuer=Fiap.Api.InclusaoDiversidadeEmpresas \
+            -e JwtSettings__Audience=UsuariosDaApiFiap \
+            -e AdminCredentials__Email=admin@fiap.com \
+            -e AdminCredentials__Senha=${{ secrets.ADMIN_PASSWORD }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${SHORT_SHA}
+
+      - name: Health check staging
+        run: |
+          sleep 10
+          echo "========================================="
+          echo "  Containers em execução — Staging"
+          echo "========================================="
+          docker ps --filter "name=inclusao-staging"
+          echo "-----------------------------------------"
+          docker logs inclusao-staging --tail=30
+
+  # ==========================================
+  # Job 4: Deploy Production
+  # ==========================================
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      # Step 1: Checkout do código fonte
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2: Login no GitHub Container Registry
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 3: Converter nome da imagem para lowercase
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      # Step 4: Pull da imagem de produção (latest)
+      - name: Pull production image
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
+
+      # Step 5: Parar container anterior se existir
+      - name: Stop existing production container
+        run: |
+          docker stop inclusao-production || true
+          docker rm inclusao-production || true
+
+      # Step 6: Subir container de produção na porta 8080
+      - name: Run production container
+        run: |
+          docker run -d \
+            --name inclusao-production \
+            -p 8080:8080 \
+            -e ASPNETCORE_ENVIRONMENT=Production \
+            -e ASPNETCORE_URLS=http://+:8080 \
+            -e JwtSettings__SecretKey=${{ secrets.JWT_SECRET_KEY }} \
+            -e JwtSettings__Issuer=Fiap.Api.InclusaoDiversidadeEmpresas \
+            -e JwtSettings__Audience=UsuariosDaApiFiap \
+            -e AdminCredentials__Email=admin@fiap.com \
+            -e AdminCredentials__Senha=${{ secrets.ADMIN_PASSWORD }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
+
+      # Step 7: Verificar container em execução (evidência para o PDF)
+      - name: Health check production
+        run: |
+          sleep 10
+          echo "========================================="
+          echo "  Containers em execução — Production"
+          echo "========================================="
+          docker ps --filter "name=inclusao-production"
+          echo "-----------------------------------------"
+          docker logs inclusao-production --tail=30
+
+  # ==========================================
+  # Job 5: Notificações
+  # ==========================================
+  notify:
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resumo do pipeline
+        run: |
+          echo "==============================="
+          echo "  Pipeline finalizado!"
+          echo "==============================="
+          echo "Repositório : ${{ github.repository }}"
+          echo "Branch      : ${{ github.ref_name }}"
+          echo "Commit      : ${{ github.sha }}"
+          echo "Staging     : ${{ needs.deploy-staging.result }}"
+          echo "Production  : ${{ needs.deploy-production.result }}"
+          echo "==============================="
